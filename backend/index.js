@@ -104,6 +104,14 @@ app.post('/forked/auth/login', async (req, res) => {
     }
 });
 
+// Homepage
+app.get('/', (req, res) => {
+    res.json({ 
+        message: 'Forked API is running 🍴🚀',
+        docs: 'Vai a /forked/... per usare le API' 
+    });
+});
+
 // Visualizza ricette
 app.get('/forked/ricette', async (req, res) => {
     try {
