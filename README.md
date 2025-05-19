@@ -271,3 +271,63 @@ Il backend include un middleware per la gestione degli errori che:
 - Validazione degli input
 - Protezione degli endpoint sensibili
 - Gestione sicura degli errori
+
+# Middlewares Utilizzati
+
+## Middleware di Autenticazione (`auth.js`)
+
+### Funzionalità
+Il middleware `auth` verifica la validità del token JWT fornito nelle richieste e associa l'utente autenticato all'oggetto `req` per l'utilizzo nei route handler successivi.
+
+### Flusso di Esecuzione
+1. **Estrazione del token**:
+   - Cerca il token nell'header `Authorization` della richiesta
+   - Rimuove il prefisso `Bearer ` se presente
+
+2. **Verifica del token**:
+   - Utilizza `jwt.verify` per decodificare e verificare il token con il segreto JWT
+   - Se il token è mancante o non valido, restituisce errore 401
+
+3. **Ricerca utente**:
+   - Cerca l'utente nel database usando l'ID estratto dal token
+   - Se l'utente non esiste, restituisce errore 401
+
+4. **Associazione utente**:
+   - Se tutto è valido, associa l'oggetto utente a `req.user`
+   - Chiama `next()` per passare al prossimo middleware/route handler
+
+### Errori Restituiti
+- `401 Unauthorized`:
+  - "Token mancante" - quando l'header Authorization non è presente
+  - "Utente non trovato" - quando l'ID nel token non corrisponde a nessun utente
+  - "Autenticazione fallita" - per qualsiasi altro errore di verifica
+
+## Middleware di Gestione Errori (`errorHandler.js`)
+
+### Funzionalità
+Il middleware `errorHandler` intercetta e gestisce tutti gli errori non catturati nell'applicazione, fornendo una risposta standardizzata al client e loggando l'errore sul server.
+
+### Comportamento
+1. **Log dell'errore**:
+   - Registra l'intero stack trace dell'errore sulla console
+
+2. **Risposta al client**:
+   - Restituisce sempre status code `500 Internal Server Error`
+   - Invia un messaggio generico "Errore interno del server"
+   - In modalità sviluppo (`NODE_ENV=development`), include anche il messaggio specifico dell'errore
+
+### Esempio di Risposta
+**In produzione**:
+```json
+{
+    "message": "Errore interno del server"
+}
+```
+
+**In sviluppo**:
+```json
+{
+    "message": "Errore interno del server",
+    "error": "Specific error message here"
+}
+```
