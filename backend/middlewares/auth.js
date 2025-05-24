@@ -1,4 +1,3 @@
-// middlewares/auth.js
 const { ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
 
