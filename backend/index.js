@@ -113,7 +113,7 @@ app.get('/', (req, res) => {
 });
 
 // Visualizza ricette
-app.get('/forked/ricette', async (req, res) => {
+app.get('/forked/recipes', async (req, res) => {
     try {
         const ricette = await db.collection('ricette').aggregate([
             {
@@ -133,6 +133,7 @@ app.get('/forked/ricette', async (req, res) => {
                     name: 1,
                     ingredients: 1,
                     instructions: 1,
+                    imageUrl: 1, // Aggiungi questo campo
                     createdAt: 1,
                     updatedAt: 1,
                     "creatore.name": 1,
@@ -148,10 +149,56 @@ app.get('/forked/ricette', async (req, res) => {
     }
 });
 
-// Aggiungi ricetta
-app.post('/forked/recipies', auth, async (req, res) => {
+// GET - Dettaglio singola ricetta
+app.get('/forked/recipes/:name', async (req, res) => {
     try {
-        const { name, ingredients, instructions } = req.body;
+        const ricettaId = req.params.id;
+
+        const ricetta = await db.collection('ricette').aggregate([
+            {
+                $match: { _id: new ObjectId(ricettaId) }
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "creatore"
+                }
+            },
+            {
+                $unwind: "$creatore"
+            },
+            {
+                $project: {
+                    _id: 1,
+                    name: 1,
+                    ingredients: 1,
+                    instructions: 1,
+                    imageUrl: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    "creatore.name": 1,
+                    "creatore._id": 1
+                }
+            }
+        ]).next();
+
+        if (!ricetta) {
+            return res.status(404).json({ message: 'Ricetta non trovata' });
+        }
+
+        res.json(ricetta);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Errore nel recupero della ricetta' });
+    }
+});
+
+// Aggiungi ricetta
+app.post('/forked/recipes', auth, async (req, res) => {
+    try {
+        const { name, ingredients, instructions, imageUrl } = req.body;
 
         if (!name || !ingredients || !instructions) {
             return res.status(400).json({ message: 'Dati mancanti' });
@@ -161,6 +208,7 @@ app.post('/forked/recipies', auth, async (req, res) => {
             name,
             ingredients,
             instructions,
+            imageUrl: imageUrl || null, // Aggiungi questo campo
             userId: req.user._id,
             createdAt: new Date(),
             updatedAt: new Date()
@@ -173,6 +221,97 @@ app.post('/forked/recipies', auth, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Errore nella creazione della ricetta' });
+    }
+});
+
+// DELETE - Elimina ricetta (solo il proprietario può eliminare)
+app.delete('/forked/recipes/:name', auth, async (req, res) => {
+    try {
+        const ricettaId = req.params.id;
+
+        // Verifica che la ricetta esista e appartenga all'utente
+        const ricetta = await db.collection('ricette').findOne({
+            _id: new ObjectId(ricettaId),
+            userId: req.user._id
+        });
+
+        if (!ricetta) {
+            return res.status(404).json({ 
+                message: 'Ricetta non trovata o non autorizzato' 
+            });
+        }
+
+        // Elimina la ricetta
+        const result = await db.collection('ricette').deleteOne({
+            _id: new ObjectId(ricettaId)
+        });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ message: 'Ricetta non trovata' });
+        }
+
+        // Opzionale: elimina anche i commenti associati
+        await db.collection('commenti').deleteMany({
+            nomeRicetta: ricetta.name
+        });
+
+        res.json({ message: 'Ricetta eliminata con successo' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Errore nell\'eliminazione della ricetta' });
+    }
+});
+
+// PUT - Modifica ricetta (solo il proprietario può modificare)
+app.put('/forked/recipes/:name', auth, async (req, res) => {
+    try {
+        const ricettaId = req.params.id;
+        const { name, ingredients, instructions, imageUrl } = req.body;
+
+        // Verifica che la ricetta esista e appartenga all'utente
+        const ricettaEsistente = await db.collection('ricette').findOne({
+            _id: new ObjectId(ricettaId),
+            userId: req.user._id
+        });
+
+        if (!ricettaEsistente) {
+            return res.status(404).json({ 
+                message: 'Ricetta non trovata o non autorizzato' 
+            });
+        }
+
+        // Prepara gli aggiornamenti
+        const updates = {
+            updatedAt: new Date()
+        };
+
+        if (name) updates.name = name;
+        if (ingredients) updates.ingredients = ingredients;
+        if (instructions) updates.instructions = instructions;
+        if (imageUrl !== undefined) updates.imageUrl = imageUrl;
+
+        // Aggiorna la ricetta
+        const result = await db.collection('ricette').updateOne(
+            { _id: new ObjectId(ricettaId) },
+            { $set: updates }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Ricetta non trovata' });
+        }
+
+        // Se è cambiato il nome, aggiorna i commenti associati
+        if (name && name !== ricettaEsistente.name) {
+            await db.collection('commenti').updateMany(
+                { nomeRicetta: ricettaEsistente.name },
+                { $set: { nomeRicetta: name } }
+            );
+        }
+
+        res.json({ message: 'Ricetta aggiornata con successo' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Errore nell\'aggiornamento della ricetta' });
     }
 });
 
@@ -303,10 +442,19 @@ app.put('/forked/users/profile', auth, async (req, res) => {
 });
 
 // Visualizza ricette dell'utente loggato
-app.get('/forked/myrecipies', auth, async (req, res) => {
+app.get('/forked/myrecipes', auth, async (req, res) => {
     try {
         const ricette = await db.collection('ricette').find({
             userId: req.user._id
+        }, {
+            projection: {
+                name: 1,
+                ingredients: 1,
+                instructions: 1,
+                imageUrl: 1, // Aggiungi questo campo
+                createdAt: 1,
+                updatedAt: 1
+            }
         }).toArray();
 
         res.json(ricette);
