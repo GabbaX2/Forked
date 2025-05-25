@@ -361,9 +361,8 @@ app.post('/forked/lista-spesa', async (req, res) => {
             return res.status(400).json({ message: 'Dati non validi' });
         }
 
-        const ricetteIds = ricette.map(id => new ObjectId(id));
         const ricetteSelezionate = await db.collection('ricette')
-            .find({ _id: { $in: ricetteIds } })
+            .find({ name: { $in: ricette } })
             .toArray();
 
         if (ricetteSelezionate.length !== ricette.length) {
@@ -398,26 +397,23 @@ app.get('/forked/lista-spesa', async (req, res) => {
     try {
         const { ricette, persone } = req.query;
 
-        // Validazione input
         if (!ricette || !persone || isNaN(persone)) {
             return res.status(400).json({ 
-                message: 'Parametri mancanti: ricette (ID separati da virgola) e persone (numero)' 
+                message: 'Parametri mancanti: ricette (nomi separati da virgola) e persone (numero)' 
             });
         }
 
-        const ricetteIds = ricette.split(',').map(id => new ObjectId(id));
+        const ricetteNomi = ricette.split(',');
         const numPersone = parseInt(persone);
 
-        // Recupera le ricette dal DB
         const ricetteSelezionate = await db.collection('ricette')
-            .find({ _id: { $in: ricetteIds } })
+            .find({ name: { $in: ricetteNomi } })
             .toArray();
 
-        if (ricetteSelezionate.length !== ricetteIds.length) {
+        if (ricetteSelezionate.length !== ricetteNomi.length) {
             return res.status(404).json({ message: 'Alcune ricette non trovate' });
         }
 
-        // Calcola la lista della spesa
         const listaSpesa = {};
         ricetteSelezionate.forEach(ricetta => {
             ricetta.ingredients.forEach(ingrediente => {
@@ -431,7 +427,6 @@ app.get('/forked/lista-spesa', async (req, res) => {
             });
         });
 
-        // Formatta la risposta
         res.json({
             ricette: ricetteSelezionate.map(r => r.name),
             listaSpesa: Object.values(listaSpesa),
