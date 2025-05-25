@@ -105,6 +105,26 @@ app.post('/forked/auth/login', async (req, res) => {
     }
 });
 
+// Verifica token
+app.get('/forked/auth/verify', auth, async (req, res) => {
+    try {
+        const user = await db.collection('users').findOne({ _id: req.user._id });
+        if (!user) {
+            return res.status(404).json({ message: 'Utente non trovato' });
+        }
+        res.json({ 
+            user: { 
+                id: user._id, 
+                name: user.name, 
+                email: user.email 
+            } 
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Errore del server' });
+    }
+});
+
 // Homepage
 app.get('/', (req, res) => {
     res.json({ 
@@ -210,24 +230,29 @@ app.get('/forked/recipes/:name', async (req, res) => {
 app.post('/forked/recipes', auth, async (req, res) => {
     try {
         const { name, ingredients, instructions, imageUrl } = req.body;
-
         if (!name || !ingredients || !instructions) {
             return res.status(400).json({ message: 'Dati mancanti' });
         }
-
+        
+        // Recupera le informazioni complete dell'utente
+        const user = await db.collection('users').findOne({ _id: req.user._id });
+        if (!user) {
+            return res.status(404).json({ message: 'Utente non trovato' });
+        }
+        
         const ricetta = {
             name,
             ingredients,
             instructions,
-            imageUrl: imageUrl || null, // Aggiungi questo campo
+            imageUrl: imageUrl || null,
             userId: req.user._id,
+            userName: user.name || user.username || 'Utente sconosciuto',
             createdAt: new Date(),
             updatedAt: new Date()
         };
-
+        
         const result = await db.collection('ricette').insertOne(ricetta);
         ricetta._id = result.insertedId;
-
         res.status(201).json(ricetta);
     } catch (error) {
         console.error(error);
