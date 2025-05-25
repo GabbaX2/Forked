@@ -351,7 +351,7 @@ app.put('/forked/recipes/:name', auth, async (req, res) => {
     }
 });
 
-// Generazione lista della spesa
+// POST - Generazione e salvataggio lista della spesa
 app.post('/forked/lista-spesa', async (req, res) => {
     try {
         const { ricette, persone } = req.body;
@@ -382,17 +382,23 @@ app.post('/forked/lista-spesa', async (req, res) => {
             });
         });
 
-        res.json({
+        const documentoLista = {
             listaSpesa: Object.values(listaSpesa),
-            ricette: ricetteSelezionate.map(r => r.name)
-        });
+            ricette: ricetteSelezionate.map(r => r.name),
+            persone,
+            createdAt: new Date()
+        };
+
+        await db.collection('liste-spesa').insertOne(documentoLista);
+
+        res.json(documentoLista);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Errore nella generazione della lista' });
     }
 });
 
-// GET - Visualizza lista della spesa (con query params)
+// GET - Solo generazione lista della spesa, senza salvataggio
 app.get('/forked/lista-spesa', async (req, res) => {
     try {
         const { ricette, persone } = req.query;
@@ -433,7 +439,6 @@ app.get('/forked/lista-spesa', async (req, res) => {
             persone: numPersone,
             createdAt: new Date()
         });
-
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Errore nella generazione della lista' });
