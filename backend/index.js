@@ -112,42 +112,52 @@ app.get('/', (req, res) => {
     });
 });
 
-// Visualizza ricette
 app.get('/forked/recipes', async (req, res) => {
     try {
-        const ricette = await db.collection('ricette').aggregate([
-            {
-                $lookup: {
-                    from: "users",
-                    localField: "userId",
-                    foreignField: "_id",
-                    as: "creatore"
-                }
-            },
-            {
-                $unwind: "$creatore"
-            },
-            {
-                $project: {
-                    _id: 1,
-                    name: 1,
-                    ingredients: 1,
-                    instructions: 1,
-                    imageUrl: 1, // Aggiungi questo campo
-                    createdAt: 1,
-                    updatedAt: 1,
-                    "creatore.name": 1,
-                    "creatore._id": 1
-                }
-            }
-        ]).toArray();
-
+        const ricette = await db.collection('ricette').find().toArray();
         res.json(ricette);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Errore nel recupero delle ricette' });
     }
 });
+
+// Visualizza ricette
+// app.get('/forked/recipes', async (req, res) => {
+//     try {
+//         const ricette = await db.collection('ricette').aggregate([
+//             {
+//                 $lookup: {
+//                     from: "users",
+//                     localField: "userId",
+//                     foreignField: "_id",
+//                     as: "creatore"
+//                 }
+//             },
+//             {
+//                 $unwind: "$creatore"
+//             },
+//             {
+//                 $project: {
+//                     _id: 1,
+//                     name: 1,
+//                     ingredients: 1,
+//                     instructions: 1,
+//                     imageUrl: 1, // Aggiungi questo campo
+//                     createdAt: 1,
+//                     updatedAt: 1,
+//                     "creatore.name": 1,
+//                     "creatore._id": 1
+//                 }
+//             }
+//         ]).toArray();
+
+//         res.json(ricette);
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ message: 'Errore nel recupero delle ricette' });
+//     }
+// });
 
 // GET - Dettaglio singola ricetta
 app.get('/forked/recipes/:name', async (req, res) => {
