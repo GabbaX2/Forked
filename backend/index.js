@@ -105,6 +105,33 @@ app.post('/forked/auth/login', async (req, res) => {
     }
 });
 
+const crypto = require('crypto');
+
+// Richiesta reset password
+app.post('/forked/auth/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ message: 'Email richiesta' });
+
+        const user = await db.collection('users').findOne({ email });
+        if (!user) return res.status(200).json({ message: 'Se esiste, riceverai una mail' });
+
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 3600000); // 1 ora
+
+        await db.collection('resetTokens').insertOne({
+            userId: user._id,
+            token,
+            expiresAt
+        });
+
+        res.status(200).json({ message: 'Se esiste, riceverai una mail con il link per reimpostare la password' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Errore nel reset' });
+    }
+});
+
 // Homepage
 app.get('/', (req, res) => {
     res.json({ 
