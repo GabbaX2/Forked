@@ -9,10 +9,6 @@ const app = express();
 
 app.use(cors({ origin: "https://forked-front.vercel.app"}));
 
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*")
-});
-
 app.use(express.json());
  
 const auth = require('./middlewares/auth');
