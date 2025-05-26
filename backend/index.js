@@ -6,9 +6,7 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
  
 const app = express();
-
-app.use(cors({ origin: "https://forked-front.vercel.app/"}));
-
+app.use(cors());
 app.use(express.json());
  
 const auth = require('./middlewares/auth');
@@ -36,42 +34,6 @@ const connectToDatabase = async () => {
         process.exit(1);
     }
 };
-
-// Homepage - Rotta di benvenuto
-app.get('/', (req, res) => {
-    res.json({
-        message: "🍴 Benvenuto nell'API di Forked!",
-        version: "1.0.0",
-        description: "API per la gestione di ricette e liste della spesa",
-        endpoints: {
-            auth: {
-                register: "POST /forked/auth/register",
-                login: "POST /forked/auth/login"
-            },
-            recipes: {
-                getAllRecipes: "GET /forked/recipes",
-                addRecipe: "POST /forked/recipies (auth required)",
-                getMyRecipes: "GET /forked/myrecipies (auth required)"
-            },
-            shoppingList: {
-                generateList: "POST /forked/lista-spesa",
-                getList: "GET /forked/lista-spesa?ricette=id1,id2&persone=4"
-            },
-            user: {
-                getProfile: "GET /forked/users/profile (auth required)",
-                updateProfile: "PUT /forked/users/profile (auth required)"
-            },
-            comments: {
-                addComment: "POST /forked/ricette/:nome/commenti (auth required)",
-                getComments: "GET /forked/ricette/:nome/commenti",
-                deleteComment: "DELETE /forked/ricette/:nome/commenti/:id (auth required)"
-            }
-        },
-        documentation: "Usa gli endpoint sopra per interagire con l'API",
-        status: "✅ Online",
-        timestamp: new Date().toISOString()
-    });
-});
  
 // Registrazione
 app.post('/forked/auth/register', async (req, res) => {
