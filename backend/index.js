@@ -39,35 +39,7 @@ const connectToDatabase = async () => {
 app.get('/', (req, res) => {
     res.json({
         message: "🍴 Benvenuto nell'API di Forked!",
-        version: "1.0.0",
-        description: "API per la gestione di ricette e liste della spesa",
-        endpoints: {
-            auth: {
-                register: "POST /forked/auth/register",
-                login: "POST /forked/auth/login"
-            },
-            recipes: {
-                getAllRecipes: "GET /forked/recipes",
-                addRecipe: "POST /forked/recipies (auth required)",
-                getMyRecipes: "GET /forked/myrecipies (auth required)"
-            },
-            shoppingList: {
-                generateList: "POST /forked/lista-spesa",
-                getList: "GET /forked/lista-spesa?ricette=id1,id2&persone=4"
-            },
-            user: {
-                getProfile: "GET /forked/users/profile (auth required)",
-                updateProfile: "PUT /forked/users/profile (auth required)"
-            },
-            comments: {
-                addComment: "POST /forked/ricette/:nome/commenti (auth required)",
-                getComments: "GET /forked/ricette/:nome/commenti",
-                deleteComment: "DELETE /forked/ricette/:nome/commenti/:id (auth required)"
-            }
-        },
-        documentation: "Usa gli endpoint sopra per interagire con l'API",
-        status: "✅ Online",
-        timestamp: new Date().toISOString()
+        version: "1.0.0"
     });
 });
  
