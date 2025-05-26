@@ -13,6 +13,10 @@ var corsOptions = {
 
 app.use(cors(corsOptions));
 
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*")
+});
+
 app.use(express.json());
  
 const auth = require('./middlewares/auth');
