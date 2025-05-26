@@ -6,20 +6,8 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
  
 const app = express();
-// Configurazione CORS completa
-const corsOptions = {
-  origin: [
-    'https://forked-front.vercel.app',
-    'http://localhost:5173' // Aggiungi l'URL di sviluppo se necessario
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-};
 
-app.use(cors(corsOptions));
-
-// Gestisci manualmente le richieste OPTIONS per sicurezza
-app.options('*', cors(corsOptions));
+app.use(cors());
 
 app.use(express.json());
  
