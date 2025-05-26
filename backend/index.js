@@ -6,23 +6,53 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 
 const app = express();
+
 const corsOptions = {
-  origin: ['https://forked-front.vercel.app'],
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  origin: [
+    'https://forked-front.vercel.app',
+    'http://localhost:3000' // for local development
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept'
+  ],
   credentials: true,
-  optionsSuccessStatus: 204
+  optionsSuccessStatus: 204,
+  preflightContinue: false
 };
 
 app.use(cors(corsOptions));
 
+app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://forked-front.vercel.app');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 
 const auth = require('./middlewares/auth');
 const errorHandler = require('./middlewares/errorHandler');
 
 app.use(errorHandler);
+
+// Add this if you're handling redirects
+app.use((req, res, next) => {
+  if (!req.secure && req.get('x-forwarded-proto') !== 'https') {
+    return res.redirect(301, `https://${req.hostname}${req.url}`);
+  }
+  next();
+});
 
 // Verifica variabili d'ambiente
 if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
