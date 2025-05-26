@@ -7,26 +7,21 @@ const cors = require('cors');
  
 const app = express();
 // Configurazione CORS completa
-app.use(cors({
-    origin: 'https://forked-front.vercel.app',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
-    optionsSuccessStatus: 200 // Per vecchi browser/IE
-}));
+const corsOptions = {
+  origin: [
+    'https://forked-front.vercel.app',
+    'http://localhost:5173' // Aggiungi l'URL di sviluppo se necessario
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  credentials: true,
+  optionsSuccessStatus: 204
+};
 
-// Middleware per logging (debug)
-app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-    next();
-});
+app.use(cors(corsOptions));
 
-app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', 'https://forked-front.vercel.app');
-    // Oppure per permettere a tutti i domini:
-    // res.setHeader('Access-Control-Allow-Origin', '*');
-    next();
-});
+// Gestisci manualmente le richieste OPTIONS per sicurezza
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
  
