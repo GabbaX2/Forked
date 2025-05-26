@@ -10,10 +10,7 @@ const app = express();
 // CORS Configuration - Fixed for credentials
 const corsOptions = {
     origin: [
-        'https://forked-front.vercel.app',
-        'http://localhost:3000',
-        'http://localhost:5173'
-    ], // Replace with your actual frontend domains
+        'https://forked-front.vercel.app'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -21,35 +18,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
-
-// Auth Middleware (inline definition)
-const auth = async (req, res, next) => {
-    try {
-        const token = req.header('Authorization')?.replace('Bearer ', '');
-        
-        if (!token) {
-            return res.status(401).json({ message: 'Token mancante' });
-        }
-
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await db.collection('users').findOne({ _id: new ObjectId(decoded.id) });
-        
-        if (!user) {
-            return res.status(401).json({ message: 'Token non valido' });
-        }
-        
-        req.user = user;
-        next();
-    } catch (error) {
-        res.status(401).json({ message: 'Token non valido' });
-    }
-};
-
-// Error Handler Middleware
-const errorHandler = (err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ message: 'Errore interno del server' });
-};
 
 // Verifica variabili d'ambiente
 if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
