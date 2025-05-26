@@ -9,7 +9,7 @@ const app = express();
 app.use(cors({
     origin: 'https://forked-front.vercel.app', // Permetti solo richieste da questo dominio
     methods: ['GET', 'POST', 'OPTIONS'], // Specifica i metodi consentiti
-    allowedHeaders: ['Content-Type'], // Specifica gli header consentiti
+    allowedHeaders: ['Content-Type', 'Authorization'], // Specifica gli header consentiti
     credentials: true // Se necessario, abilita le credenziali (cookies, autorizzazioni)
 }));
 app.use(express.json());
