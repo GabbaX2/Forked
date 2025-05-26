@@ -6,12 +6,20 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
  
 const app = express();
+// Configurazione CORS completa
 app.use(cors({
-    origin: 'https://forked-front.vercel.app', // Permetti solo richieste da questo dominio
-    methods: ['GET', 'POST', 'OPTIONS'], // Specifica i metodi consentiti
-    allowedHeaders: ['Content-Type', 'Authorization'], // Specifica gli header consentiti
-    credentials: true // Se necessario, abilita le credenziali (cookies, autorizzazioni)
+    origin: 'https://forked-front.vercel.app',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+    optionsSuccessStatus: 200 // Per vecchi browser/IE
 }));
+
+// Middleware per logging (debug)
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    next();
+});
 
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', 'https://forked-front.vercel.app');
