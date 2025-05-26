@@ -7,11 +7,7 @@ const cors = require('cors');
  
 const app = express();
 
-var corsOptions = {
-  origin: "https://forked-front.vercel.app/"
-};
-
-app.use(cors(corsOptions));
+app.use(cors({ origin: "https://forked-front.vercel.app"}));
 
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*")
