@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
  
 const app = express();
-app.use(cors());
+app.use(cors({origin: 'https://form-front-lac.vercel.app'}));
 app.use(express.json());
  
 const auth = require('./middlewares/auth');
