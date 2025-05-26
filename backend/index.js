@@ -4,13 +4,6 @@ const { MongoClient, ObjectId } = require('mongodb');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
-
-app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', 'https://forked-front.vercel.app');
-    // Oppure per permettere a tutti i domini:
-    // res.setHeader('Access-Control-Allow-Origin', '*');
-    next();
-});
  
 const app = express();
 app.use(cors({
@@ -19,6 +12,14 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization'], // Specifica gli header consentiti
     credentials: true // Se necessario, abilita le credenziali (cookies, autorizzazioni)
 }));
+
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', 'https://forked-front.vercel.app');
+    // Oppure per permettere a tutti i domini:
+    // res.setHeader('Access-Control-Allow-Origin', '*');
+    next();
+});
+
 app.use(express.json());
  
 const auth = require('./middlewares/auth');
