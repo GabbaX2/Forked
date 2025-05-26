@@ -6,7 +6,12 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
  
 const app = express();
-app.use(cors({origin: 'https://form-front-lac.vercel.app'}));
+app.use(cors({
+    origin: 'https://forked-front.vercel.app', // Permetti solo richieste da questo dominio
+    methods: ['GET', 'POST', 'OPTIONS'], // Specifica i metodi consentiti
+    allowedHeaders: ['Content-Type'], // Specifica gli header consentiti
+    credentials: true // Se necessario, abilita le credenziali (cookies, autorizzazioni)
+}));
 app.use(express.json());
  
 const auth = require('./middlewares/auth');
