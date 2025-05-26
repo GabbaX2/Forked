@@ -567,12 +567,18 @@ app.get('/forked/myrecipes', auth, async (req, res) => {
     }
 });
 
-// POST - Aggiungi commento 
-app.post('/forked/ricette/:nome/commenti', auth, async (req, res) => {
+// The issue is likely in route parameter handling. Here are the problematic routes fixed:
+
+// Instead of using :nome directly, use a more explicit pattern
+// OLD (problematic):
+// app.post('/forked/ricette/:nome/commenti', auth, async (req, res) => {
+
+// NEW (fixed):
+app.post('/forked/ricette/:nome(*)/commenti', auth, async (req, res) => {
     try {
         const { testo } = req.body;
         const nomeRicetta = decodeURIComponent(req.params.nome);
-
+        
         if (!testo || testo.trim() === '') {
             return res.status(400).json({ message: 'Il commento non può essere vuoto' });
         }
@@ -609,8 +615,8 @@ app.post('/forked/ricette/:nome/commenti', auth, async (req, res) => {
     }
 });
 
-// GET - Ottieni commenti di una ricetta 
-app.get('/forked/ricette/:nome/commenti', async (req, res) => {
+// GET - Ottieni commenti di una ricetta (fixed)
+app.get('/forked/ricette/:nome(*)/commenti', async (req, res) => {
     try {
         const nomeRicetta = decodeURIComponent(req.params.nome);
 
@@ -634,11 +640,117 @@ app.get('/forked/ricette/:nome/commenti', async (req, res) => {
     }
 });
 
-// DELETE - Elimina commento 
-app.delete('/forked/ricette/:nome/commenti/:id', auth, async (req, res) => {
+// DELETE - Elimina commento (fixed)
+app.delete('/forked/ricette/:nome(*)/commenti/:id', auth, async (req, res) => {
     try {
         const nomeRicetta = decodeURIComponent(req.params.nome);
         const commentId = req.params.id;
+
+        const result = await db.collection('commenti').deleteOne({
+            _id: new ObjectId(commentId),
+            nomeRicetta,
+            userId: req.user._id // Solo l'autore può eliminare
+        });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ 
+                message: 'Commento non trovato o non autorizzato' 
+            });
+        }
+
+        res.json({ message: 'Commento eliminato' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Errore nell\'eliminazione' });
+    }
+});
+
+// Alternative approach - use query parameters instead of path parameters for recipe names
+// This completely avoids the path-to-regexp issue:
+
+// POST - Aggiungi commento (alternative approach)
+app.post('/forked/ricette/commenti', auth, async (req, res) => {
+    try {
+        const { testo, nomeRicetta } = req.body;
+
+        if (!testo || testo.trim() === '') {
+            return res.status(400).json({ message: 'Il commento non può essere vuoto' });
+        }
+
+        if (!nomeRicetta) {
+            return res.status(400).json({ message: 'Nome ricetta mancante' });
+        }
+
+        // Verifica che la ricetta esista
+        const ricetta = await db.collection('ricette').findOne({
+            name: nomeRicetta
+        });
+        if (!ricetta) {
+            return res.status(404).json({ message: 'Ricetta non trovata' });
+        }
+
+        // Ottieni dati utente
+        const user = await db.collection('users').findOne(
+            { _id: req.user._id },
+            { projection: { name: 1 } }
+        );
+
+        const commento = {
+            nomeRicetta,
+            userId: req.user._id,
+            userNome: user.name,
+            testo,
+            createdAt: new Date()
+        };
+
+        const result = await db.collection('commenti').insertOne(commento);
+        commento._id = result.insertedId;
+
+        res.status(201).json(commento);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Errore nell\'aggiunta del commento' });
+    }
+});
+
+// GET - Ottieni commenti di una ricetta (alternative approach)
+app.get('/forked/ricette/commenti', async (req, res) => {
+    try {
+        const { nomeRicetta } = req.query;
+        
+        if (!nomeRicetta) {
+            return res.status(400).json({ message: 'Nome ricetta mancante' });
+        }
+
+        const commenti = await db.collection('commenti')
+            .find({ nomeRicetta })
+            .sort({ createdAt: -1 })
+            .toArray();
+
+        res.json(commenti.map(c => ({
+            _id: c._id,
+            testo: c.testo,
+            createdAt: c.createdAt,
+            user: {
+                _id: c.userId,
+                name: c.userNome
+            }
+        })));
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Errore nel recupero dei commenti' });
+    }
+});
+
+// DELETE - Elimina commento (alternative approach)
+app.delete('/forked/ricette/commenti/:id', auth, async (req, res) => {
+    try {
+        const { nomeRicetta } = req.query;
+        const commentId = req.params.id;
+
+        if (!nomeRicetta) {
+            return res.status(400).json({ message: 'Nome ricetta mancante' });
+        }
 
         const result = await db.collection('commenti').deleteOne({
             _id: new ObjectId(commentId),
