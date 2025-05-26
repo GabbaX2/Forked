@@ -140,26 +140,6 @@ app.post('/forked/auth/login', async (req, res) => {
     }
 });
 
-// Verifica token
-app.get('/forked/auth/verify', auth, async (req, res) => {
-    try {
-        const user = await db.collection('users').findOne({ _id: req.user._id });
-        if (!user) {
-            return res.status(404).json({ message: 'Utente non trovato' });
-        }
-        res.json({ 
-            user: { 
-                id: user._id, 
-                name: user.name, 
-                email: user.email 
-            } 
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Errore del server' });
-    }
-});
-
 // Homepage
 app.get('/', (req, res) => {
     res.json({ 
@@ -178,14 +158,14 @@ app.get('/forked/recipes', async (req, res) => {
     }
 });
 
-// GET - Dettaglio singola ricetta
+// GET - Dettaglio singola ricetta (by name)
 app.get('/forked/recipes/:name', async (req, res) => {
     try {
-        const ricettaId = req.params.id;
+        const ricettaName = req.params.name;
 
         const ricetta = await db.collection('ricette').aggregate([
             {
-                $match: { _id: new ObjectId(ricettaId) }
+                $match: { name: ricettaName }
             },
             {
                 $lookup: {
