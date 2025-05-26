@@ -8,10 +8,7 @@ const cors = require('cors');
 const app = express();
 
 const corsOptions = {
-  origin: [
-    'https://forked-front.vercel.app',
-    'http://localhost:3000' // for local development
-  ],
+  origin: ['https://forked-front.vercel.app'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type',
