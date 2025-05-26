@@ -319,7 +319,7 @@ app.put('/forked/users/profile', auth, async (req, res) => {
 });
  
 // Visualizza ricette dell'utente loggato
-app.get('/forked/myrecipies', auth, async (req, res) => {
+app.get('/forked/myrecipes', auth, async (req, res) => {
     try {
         const ricette = await db.collection('ricette').find({
             userId: req.user._id
