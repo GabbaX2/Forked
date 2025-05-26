@@ -7,6 +7,9 @@ const cors = require('cors');
 
 const app = express();
 
+// Debug: Log Express version
+console.log('Express version:', require('express/package.json').version);
+
 const corsOptions = {
   origin: ['https://forked-front.vercel.app'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -35,8 +38,34 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const auth = require('./middlewares/auth');
-const errorHandler = require('./middlewares/errorHandler');
+// Import middleware with error handling
+let auth, errorHandler;
+try {
+  auth = require('./middlewares/auth');
+  errorHandler = require('./middlewares/errorHandler');
+} catch (error) {
+  console.warn('Middleware import failed:', error.message);
+  // Fallback auth middleware
+  auth = (req, res, next) => {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ message: 'Token mancante' });
+    }
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = { _id: new ObjectId(decoded.id) };
+      next();
+    } catch (error) {
+      res.status(401).json({ message: 'Token non valido' });
+    }
+  };
+  
+  // Fallback error handler
+  errorHandler = (err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ message: 'Errore del server' });
+  };
+}
 
 app.use(errorHandler);
 
@@ -68,7 +97,17 @@ const connectToDatabase = async () => {
     }
 };
 
-// Registrazione
+// Homepage - Test route
+console.log('Setting up route: GET /');
+app.get('/', (req, res) => {
+    res.json({ 
+        message: 'Forked API is running 🍴🚀',
+        docs: 'Vai a /forked/... per usare le API' 
+    });
+});
+
+// Auth routes
+console.log('Setting up route: POST /forked/auth/register');
 app.post('/forked/auth/register', async (req, res) => {
     try {
         const { email, password, name } = req.body;
@@ -103,7 +142,7 @@ app.post('/forked/auth/register', async (req, res) => {
     }
 });
 
-// Login
+console.log('Setting up route: POST /forked/auth/login');
 app.post('/forked/auth/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -136,15 +175,8 @@ app.post('/forked/auth/login', async (req, res) => {
     }
 });
 
-// Homepage
-app.get('/', (req, res) => {
-    res.json({ 
-        message: 'Forked API is running 🍴🚀',
-        docs: 'Vai a /forked/... per usare le API' 
-    });
-});
-
-// GET - Tutte le ricette
+// Basic recipe routes
+console.log('Setting up route: GET /forked/recipes');
 app.get('/forked/recipes', async (req, res) => {
     try {
         const ricette = await db.collection('ricette').find().toArray();
@@ -155,53 +187,7 @@ app.get('/forked/recipes', async (req, res) => {
     }
 });
 
-// GET - Dettaglio singola ricetta (by name)
-app.get('/forked/recipes/:name', async (req, res) => {
-    try {
-        const ricettaName = req.params.name;
-
-        const ricetta = await db.collection('ricette').aggregate([
-            {
-                $match: { name: ricettaName }
-            },
-            {
-                $lookup: {
-                    from: "users",
-                    localField: "userId",
-                    foreignField: "_id",
-                    as: "creatore"
-                }
-            },
-            {
-                $unwind: "$creatore"
-            },
-            {
-                $project: {
-                    _id: 1,
-                    name: 1,
-                    ingredients: 1,
-                    instructions: 1,
-                    imageUrl: 1,
-                    createdAt: 1,
-                    updatedAt: 1,
-                    "creatore.name": 1,
-                    "creatore._id": 1
-                }
-            }
-        ]).next();
-
-        if (!ricetta) {
-            return res.status(404).json({ message: 'Ricetta non trovata' });
-        }
-
-        res.json(ricetta);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Errore nel recupero della ricetta' });
-    }
-});
-
-// POST - Aggiungi ricetta
+console.log('Setting up route: POST /forked/recipes');
 app.post('/forked/recipes', auth, async (req, res) => {
     try {
         const { name, ingredients, instructions, imageUrl } = req.body;
@@ -209,7 +195,6 @@ app.post('/forked/recipes', auth, async (req, res) => {
             return res.status(400).json({ message: 'Dati mancanti' });
         }
         
-        // Recupera le informazioni complete dell'utente
         const user = await db.collection('users').findOne({ _id: req.user._id });
         if (!user) {
             return res.status(404).json({ message: 'Utente non trovato' });
@@ -235,237 +220,63 @@ app.post('/forked/recipes', auth, async (req, res) => {
     }
 });
 
-// DELETE - Elimina ricetta by ID (solo il proprietario può eliminare)
-app.delete('/forked/recipes/id/:id', auth, async (req, res) => {
+// User routes
+console.log('Setting up route: GET /forked/users/profile');
+app.get('/forked/users/profile', auth, async (req, res) => {
     try {
-        const ricettaId = req.params.id;
-
-        // Verifica che la ricetta esista e appartenga all'utente
-        const ricetta = await db.collection('ricette').findOne({
-            _id: new ObjectId(ricettaId),
-            userId: req.user._id
-        });
-
-        if (!ricetta) {
-            return res.status(404).json({ 
-                message: 'Ricetta non trovata o non autorizzato' 
-            });
-        }
-
-        // Elimina la ricetta
-        const result = await db.collection('ricette').deleteOne({
-            _id: new ObjectId(ricettaId)
-        });
-
-        if (result.deletedCount === 0) {
-            return res.status(404).json({ message: 'Ricetta non trovata' });
-        }
-
-        // Opzionale: elimina anche i commenti associati
-        await db.collection('commenti').deleteMany({
-            nomeRicetta: ricetta.name
-        });
-
-        res.json({ message: 'Ricetta eliminata con successo' });
+        const user = await db.collection('users').findOne(
+            { _id: req.user._id },
+            { projection: { password: 0 } }
+        );
+        res.json(user);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Errore nell\'eliminazione della ricetta' });
+        res.status(500).json({ message: 'Errore nel recupero del profilo' });
     }
 });
 
-// DELETE - Elimina ricetta by name (solo il proprietario può eliminare)
-app.delete('/forked/recipes/:name', auth, async (req, res) => {
+console.log('Setting up route: PUT /forked/users/profile');
+app.put('/forked/users/profile', auth, async (req, res) => {
     try {
-        const ricettaName = req.params.name;
-
-        // Verifica che la ricetta esista e appartenga all'utente
-        const ricetta = await db.collection('ricette').findOne({
-            name: ricettaName,
-            userId: req.user._id
-        });
-
-        if (!ricetta) {
-            return res.status(404).json({ 
-                message: 'Ricetta non trovata o non autorizzato' 
-            });
-        }
-
-        // Elimina la ricetta
-        const result = await db.collection('ricette').deleteOne({
-            name: ricettaName,
-            userId: req.user._id
-        });
-
-        if (result.deletedCount === 0) {
-            return res.status(404).json({ message: 'Ricetta non trovata' });
-        }
-
-        // Elimina anche i commenti associati
-        await db.collection('commenti').deleteMany({
-            nomeRicetta: ricettaName
-        });
-
-        res.json({ message: 'Ricetta eliminata con successo' });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Errore nell\'eliminazione della ricetta' });
-    }
-});
-
-// PUT - Modifica ricetta by ID (solo il proprietario può modificare)
-app.put('/forked/recipes/id/:id', auth, async (req, res) => {
-    try {
-        const ricettaId = req.params.id;
-        const { name, ingredients, instructions, imageUrl } = req.body;
-
-        // Verifica che la ricetta esista e appartenga all'utente
-        const ricettaEsistente = await db.collection('ricette').findOne({
-            _id: new ObjectId(ricettaId),
-            userId: req.user._id
-        });
-
-        if (!ricettaEsistente) {
-            return res.status(404).json({ 
-                message: 'Ricetta non trovata o non autorizzato' 
-            });
-        }
-
-        // Prepara gli aggiornamenti
-        const updates = {
-            updatedAt: new Date()
-        };
-
+        const { name, email } = req.body;
+        const updates = { updatedAt: new Date() };
         if (name) updates.name = name;
-        if (ingredients) updates.ingredients = ingredients;
-        if (instructions) updates.instructions = instructions;
-        if (imageUrl !== undefined) updates.imageUrl = imageUrl;
+        if (email) updates.email = email;
 
-        // Aggiorna la ricetta
-        const result = await db.collection('ricette').updateOne(
-            { _id: new ObjectId(ricettaId) },
+        await db.collection('users').updateOne(
+            { _id: req.user._id },
             { $set: updates }
         );
-
-        if (result.matchedCount === 0) {
-            return res.status(404).json({ message: 'Ricetta non trovata' });
-        }
-
-        // Se è cambiato il nome, aggiorna i commenti associati
-        if (name && name !== ricettaEsistente.name) {
-            await db.collection('commenti').updateMany(
-                { nomeRicetta: ricettaEsistente.name },
-                { $set: { nomeRicetta: name } }
-            );
-        }
-
-        res.json({ message: 'Ricetta aggiornata con successo' });
+        res.json({ message: 'Profilo aggiornato' });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Errore nell\'aggiornamento della ricetta' });
+        res.status(500).json({ message: 'Errore nell\'aggiornamento' });
     }
 });
 
-// PUT - Modifica ricetta by name (solo il proprietario può modificare)
-app.put('/forked/recipes/:name', auth, async (req, res) => {
+console.log('Setting up route: GET /forked/myrecipes');
+app.get('/forked/myrecipes', auth, async (req, res) => {
     try {
-        const ricettaName = req.params.name;
-        const { name, ingredients, instructions, imageUrl } = req.body;
-
-        // Verifica che la ricetta esista e appartenga all'utente
-        const ricettaEsistente = await db.collection('ricette').findOne({
-            name: ricettaName,
+        const ricette = await db.collection('ricette').find({
             userId: req.user._id
-        });
+        }, {
+            projection: {
+                name: 1,
+                ingredients: 1,
+                instructions: 1,
+                imageUrl: 1,
+                createdAt: 1,
+                updatedAt: 1
+            }
+        }).toArray();
 
-        if (!ricettaEsistente) {
-            return res.status(404).json({ 
-                message: 'Ricetta non trovata o non autorizzato' 
-            });
-        }
-
-        // Prepara gli aggiornamenti
-        const updates = {
-            updatedAt: new Date()
-        };
-
-        if (name) updates.name = name;
-        if (ingredients) updates.ingredients = ingredients;
-        if (instructions) updates.instructions = instructions;
-        if (imageUrl !== undefined) updates.imageUrl = imageUrl;
-
-        // Aggiorna la ricetta
-        const result = await db.collection('ricette').updateOne(
-            { name: ricettaName, userId: req.user._id },
-            { $set: updates }
-        );
-
-        if (result.matchedCount === 0) {
-            return res.status(404).json({ message: 'Ricetta non trovata' });
-        }
-
-        // Se è cambiato il nome, aggiorna i commenti associati
-        if (name && name !== ricettaEsistente.name) {
-            await db.collection('commenti').updateMany(
-                { nomeRicetta: ricettaEsistente.name },
-                { $set: { nomeRicetta: name } }
-            );
-        }
-
-        res.json({ message: 'Ricetta aggiornata con successo' });
+        res.json(ricette);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Errore nell\'aggiornamento della ricetta' });
+        res.status(500).json({ message: 'Errore nel recupero delle tue ricette' });
     }
 });
 
-// POST - Generazione e salvataggio lista della spesa
-app.post('/forked/lista-spesa', async (req, res) => {
-    try {
-        const { ricette, persone } = req.body;
-
-        if (!ricette || !Array.isArray(ricette) || ricette.length === 0 ||
-            !persone || isNaN(persone) || persone < 1) {
-            return res.status(400).json({ message: 'Dati non validi' });
-        }
-
-        const ricetteSelezionate = await db.collection('ricette')
-            .find({ name: { $in: ricette } })
-            .toArray();
-
-        if (ricetteSelezionate.length !== ricette.length) {
-            return res.status(404).json({ message: 'Alcune ricette non trovate' });
-        }
-
-        const listaSpesa = {};
-        ricetteSelezionate.forEach(ricetta => {
-            ricetta.ingredients.forEach(ingrediente => {
-                const key = `${ingrediente.nome}-${ingrediente.unita}`;
-                listaSpesa[key] = listaSpesa[key] || {
-                    nome: ingrediente.nome,
-                    quantita: 0,
-                    unita: ingrediente.unita
-                };
-                listaSpesa[key].quantita += ingrediente.quantita * persone;
-            });
-        });
-
-        const documentoLista = {
-            listaSpesa: Object.values(listaSpesa),
-            ricette: ricetteSelezionate.map(r => r.name),
-            persone,
-            createdAt: new Date()
-        };
-
-        await db.collection('liste-spesa').insertOne(documentoLista);
-
-        res.json(documentoLista);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Errore nella generazione della lista' });
-    }
-});
-
-// GET - Solo generazione lista della spesa, senza salvataggio
+// Lista spesa routes
+console.log('Setting up route: GET /forked/lista-spesa');
 app.get('/forked/lista-spesa', async (req, res) => {
     try {
         const { ricette, persone } = req.query;
@@ -512,164 +323,187 @@ app.get('/forked/lista-spesa', async (req, res) => {
     }
 });
 
-// GET - Dettaglio utente
-app.get('/forked/users/profile', auth, async (req, res) => {
+console.log('Setting up route: POST /forked/lista-spesa');
+app.post('/forked/lista-spesa', async (req, res) => {
     try {
-        // Escludi la password dalla risposta
-        const user = await db.collection('users').findOne(
-            { _id: req.user._id },
-            { projection: { password: 0 } }
-        );
-        res.json(user);
-    } catch (error) {
-        res.status(500).json({ message: 'Errore nel recupero del profilo' });
-    }
-});
+        const { ricette, persone } = req.body;
 
-// PUT - Aggiorna profilo (protetto)
-app.put('/forked/users/profile', auth, async (req, res) => {
-    try {
-        const { name, email } = req.body;
-        const updates = { updatedAt: new Date() };
-        if (name) updates.name = name;
-        if (email) updates.email = email;
-
-        await db.collection('users').updateOne(
-            { _id: req.user._id },
-            { $set: updates }
-        );
-        res.json({ message: 'Profilo aggiornato' });
-    } catch (error) {
-        res.status(500).json({ message: 'Errore nell\'aggiornamento' });
-    }
-});
-
-// Visualizza ricette dell'utente loggato
-app.get('/forked/myrecipes', auth, async (req, res) => {
-    try {
-        const ricette = await db.collection('ricette').find({
-            userId: req.user._id
-        }, {
-            projection: {
-                name: 1,
-                ingredients: 1,
-                instructions: 1,
-                imageUrl: 1,
-                createdAt: 1,
-                updatedAt: 1
-            }
-        }).toArray();
-
-        res.json(ricette);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Errore nel recupero delle tue ricette' });
-    }
-});
-
-// The issue is likely in route parameter handling. Here are the problematic routes fixed:
-
-// Instead of using :nome directly, use a more explicit pattern
-// OLD (problematic):
-// app.post('/forked/ricette/:nome/commenti', auth, async (req, res) => {
-
-// NEW (fixed):
-app.post('/forked/ricette/:nome(*)/commenti', auth, async (req, res) => {
-    try {
-        const { testo } = req.body;
-        const nomeRicetta = decodeURIComponent(req.params.nome);
-        
-        if (!testo || testo.trim() === '') {
-            return res.status(400).json({ message: 'Il commento non può essere vuoto' });
+        if (!ricette || !Array.isArray(ricette) || ricette.length === 0 ||
+            !persone || isNaN(persone) || persone < 1) {
+            return res.status(400).json({ message: 'Dati non validi' });
         }
 
-        // Verifica che la ricetta esista
-        const ricetta = await db.collection('ricette').findOne({
-            name: nomeRicetta
+        const ricetteSelezionate = await db.collection('ricette')
+            .find({ name: { $in: ricette } })
+            .toArray();
+
+        if (ricetteSelezionate.length !== ricette.length) {
+            return res.status(404).json({ message: 'Alcune ricette non trovate' });
+        }
+
+        const listaSpesa = {};
+        ricetteSelezionate.forEach(ricetta => {
+            ricetta.ingredients.forEach(ingrediente => {
+                const key = `${ingrediente.nome}-${ingrediente.unita}`;
+                listaSpesa[key] = listaSpesa[key] || {
+                    nome: ingrediente.nome,
+                    quantita: 0,
+                    unita: ingrediente.unita
+                };
+                listaSpesa[key].quantita += ingrediente.quantita * persone;
+            });
         });
+
+        const documentoLista = {
+            listaSpesa: Object.values(listaSpesa),
+            ricette: ricetteSelezionate.map(r => r.name),
+            persone,
+            createdAt: new Date()
+        };
+
+        await db.collection('liste-spesa').insertOne(documentoLista);
+
+        res.json(documentoLista);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Errore nella generazione della lista' });
+    }
+});
+
+// SAFE RECIPE ROUTES - Using IDs instead of names in URLs
+console.log('Setting up route: GET /forked/recipes/by-id/:id');
+app.get('/forked/recipes/by-id/:id', async (req, res) => {
+    try {
+        const ricettaId = req.params.id;
+
+        const ricetta = await db.collection('ricette').aggregate([
+            {
+                $match: { _id: new ObjectId(ricettaId) }
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "creatore"
+                }
+            },
+            {
+                $unwind: "$creatore"
+            },
+            {
+                $project: {
+                    _id: 1,
+                    name: 1,
+                    ingredients: 1,
+                    instructions: 1,
+                    imageUrl: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    "creatore.name": 1,
+                    "creatore._id": 1
+                }
+            }
+        ]).next();
+
         if (!ricetta) {
             return res.status(404).json({ message: 'Ricetta non trovata' });
         }
 
-        // Ottieni dati utente
-        const user = await db.collection('users').findOne(
-            { _id: req.user._id },
-            { projection: { name: 1 } }
-        );
-
-        const commento = {
-            nomeRicetta,
-            userId: req.user._id,
-            userNome: user.name,
-            testo,
-            createdAt: new Date()
-        };
-
-        const result = await db.collection('commenti').insertOne(commento);
-        commento._id = result.insertedId;
-
-        res.status(201).json(commento);
+        res.json(ricetta);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Errore nell\'aggiunta del commento' });
+        res.status(500).json({ message: 'Errore nel recupero della ricetta' });
     }
 });
 
-// GET - Ottieni commenti di una ricetta (fixed)
-app.get('/forked/ricette/:nome(*)/commenti', async (req, res) => {
+console.log('Setting up route: DELETE /forked/recipes/by-id/:id');
+app.delete('/forked/recipes/by-id/:id', auth, async (req, res) => {
     try {
-        const nomeRicetta = decodeURIComponent(req.params.nome);
+        const ricettaId = req.params.id;
 
-        const commenti = await db.collection('commenti')
-            .find({ nomeRicetta })
-            .sort({ createdAt: -1 })
-            .toArray();
-
-        res.json(commenti.map(c => ({
-            _id: c._id,
-            testo: c.testo,
-            createdAt: c.createdAt,
-            user: {
-                _id: c.userId,
-                name: c.userNome
-            }
-        })));
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Errore nel recupero dei commenti' });
-    }
-});
-
-// DELETE - Elimina commento (fixed)
-app.delete('/forked/ricette/:nome(*)/commenti/:id', auth, async (req, res) => {
-    try {
-        const nomeRicetta = decodeURIComponent(req.params.nome);
-        const commentId = req.params.id;
-
-        const result = await db.collection('commenti').deleteOne({
-            _id: new ObjectId(commentId),
-            nomeRicetta,
-            userId: req.user._id // Solo l'autore può eliminare
+        const ricetta = await db.collection('ricette').findOne({
+            _id: new ObjectId(ricettaId),
+            userId: req.user._id
         });
 
-        if (result.deletedCount === 0) {
+        if (!ricetta) {
             return res.status(404).json({ 
-                message: 'Commento non trovato o non autorizzato' 
+                message: 'Ricetta non trovata o non autorizzato' 
             });
         }
 
-        res.json({ message: 'Commento eliminato' });
+        const result = await db.collection('ricette').deleteOne({
+            _id: new ObjectId(ricettaId)
+        });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ message: 'Ricetta non trovata' });
+        }
+
+        await db.collection('commenti').deleteMany({
+            nomeRicetta: ricetta.name
+        });
+
+        res.json({ message: 'Ricetta eliminata con successo' });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Errore nell\'eliminazione' });
+        res.status(500).json({ message: 'Errore nell\'eliminazione della ricetta' });
     }
 });
 
-// Alternative approach - use query parameters instead of path parameters for recipe names
-// This completely avoids the path-to-regexp issue:
+console.log('Setting up route: PUT /forked/recipes/by-id/:id');
+app.put('/forked/recipes/by-id/:id', auth, async (req, res) => {
+    try {
+        const ricettaId = req.params.id;
+        const { name, ingredients, instructions, imageUrl } = req.body;
 
-// POST - Aggiungi commento (alternative approach)
-app.post('/forked/ricette/commenti', auth, async (req, res) => {
+        const ricettaEsistente = await db.collection('ricette').findOne({
+            _id: new ObjectId(ricettaId),
+            userId: req.user._id
+        });
+
+        if (!ricettaEsistente) {
+            return res.status(404).json({ 
+                message: 'Ricetta non trovata o non autorizzato' 
+            });
+        }
+
+        const updates = {
+            updatedAt: new Date()
+        };
+
+        if (name) updates.name = name;
+        if (ingredients) updates.ingredients = ingredients;
+        if (instructions) updates.instructions = instructions;
+        if (imageUrl !== undefined) updates.imageUrl = imageUrl;
+
+        const result = await db.collection('ricette').updateOne(
+            { _id: new ObjectId(ricettaId) },
+            { $set: updates }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Ricetta non trovata' });
+        }
+
+        if (name && name !== ricettaEsistente.name) {
+            await db.collection('commenti').updateMany(
+                { nomeRicetta: ricettaEsistente.name },
+                { $set: { nomeRicetta: name } }
+            );
+        }
+
+        res.json({ message: 'Ricetta aggiornata con successo' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Errore nell\'aggiornamento della ricetta' });
+    }
+});
+
+// COMMENT ROUTES - Using request body instead of URL parameters
+console.log('Setting up route: POST /forked/comments');
+app.post('/forked/comments', auth, async (req, res) => {
     try {
         const { testo, nomeRicetta } = req.body;
 
@@ -681,7 +515,6 @@ app.post('/forked/ricette/commenti', auth, async (req, res) => {
             return res.status(400).json({ message: 'Nome ricetta mancante' });
         }
 
-        // Verifica che la ricetta esista
         const ricetta = await db.collection('ricette').findOne({
             name: nomeRicetta
         });
@@ -689,7 +522,6 @@ app.post('/forked/ricette/commenti', auth, async (req, res) => {
             return res.status(404).json({ message: 'Ricetta non trovata' });
         }
 
-        // Ottieni dati utente
         const user = await db.collection('users').findOne(
             { _id: req.user._id },
             { projection: { name: 1 } }
@@ -713,8 +545,8 @@ app.post('/forked/ricette/commenti', auth, async (req, res) => {
     }
 });
 
-// GET - Ottieni commenti di una ricetta (alternative approach)
-app.get('/forked/ricette/commenti', async (req, res) => {
+console.log('Setting up route: GET /forked/comments');
+app.get('/forked/comments', async (req, res) => {
     try {
         const { nomeRicetta } = req.query;
         
@@ -742,8 +574,8 @@ app.get('/forked/ricette/commenti', async (req, res) => {
     }
 });
 
-// DELETE - Elimina commento (alternative approach)
-app.delete('/forked/ricette/commenti/:id', auth, async (req, res) => {
+console.log('Setting up route: DELETE /forked/comments/:id');
+app.delete('/forked/comments/:id', auth, async (req, res) => {
     try {
         const { nomeRicetta } = req.query;
         const commentId = req.params.id;
@@ -755,7 +587,7 @@ app.delete('/forked/ricette/commenti/:id', auth, async (req, res) => {
         const result = await db.collection('commenti').deleteOne({
             _id: new ObjectId(commentId),
             nomeRicetta,
-            userId: req.user._id // Solo l'autore può eliminare
+            userId: req.user._id
         });
 
         if (result.deletedCount === 0) {
@@ -771,10 +603,15 @@ app.delete('/forked/ricette/commenti/:id', auth, async (req, res) => {
     }
 });
 
+console.log('All routes set up successfully!');
+
 // Connessione al database e avvio server
 connectToDatabase().then(() => {
     const PORT = process.env.PORT || 6000;
     app.listen(PORT, () => {
         console.log(`🚀 Server running on port ${PORT}`);
     });
+}).catch(error => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
 });
