@@ -4,6 +4,13 @@ const { MongoClient, ObjectId } = require('mongodb');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', 'https://forked-front.vercel.app');
+    // Oppure per permettere a tutti i domini:
+    // res.setHeader('Access-Control-Allow-Origin', '*');
+    next();
+});
  
 const app = express();
 app.use(cors({
