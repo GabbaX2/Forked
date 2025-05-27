@@ -9,7 +9,7 @@ const app = express();
 
 const corsOptions = {
     credentials: true,
-    origin: ['https://forked-front.vercel.app/', 'http://localhost:80'] // Whitelist the domains you want to allow
+    origin: '*'
 };
 
 
@@ -42,13 +42,7 @@ const connectToDatabase = async () => {
     }
 };
 
-// Homepage - Rotta di benvenuto
-app.get('/', (req, res) => {
-    res.json({
-        message: "🍴 Benvenuto nell'API di Forked!",
-        version: "1.0.0"
-    });
-});
+app.get("/", (req, res) => res.send("Express on Vercel"));
  
 // Registrazione
 app.post('/forked/auth/register', async (req, res) => {
@@ -391,9 +385,8 @@ app.delete('/forked/ricette/:nome/commenti/:id', auth, async (req, res) => {
 });
  
 // Connessione al database e avvio server
-connectToDatabase().then(() => {
-    const PORT = process.env.PORT || 6000;
-    app.listen(PORT, () => {
-        console.log(`🚀 Server running on port ${PORT}`);
-    });
-});
+connectToDatabase();
+
+app.listen(3000, () => console.log("Server ready on port 3000."));
+
+module.exports = app;
