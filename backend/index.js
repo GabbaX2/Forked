@@ -385,8 +385,10 @@ app.delete('/forked/ricette/:nome/commenti/:id', auth, async (req, res) => {
 });
  
 // Connessione al database e avvio server
-connectToDatabase();
-
-app.listen(3000, () => console.log("Server ready on port 3000."));
+connectToDatabase().then(() => {
+    app.listen(3000, () => {
+        console.log(`🚀 Server running on port 3000`);
+    });
+});
 
 module.exports = app;
