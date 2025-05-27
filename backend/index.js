@@ -397,9 +397,8 @@ const startServer = async () => {
         await connectToDatabase();
         
         // Poi avvia il server
-        const PORT = process.env.PORT || 3000;
-        app.listen(PORT, () => {
-            console.log(`🚀 Server ready on port ${PORT}`);
+        app.listen(3000, () => {
+            console.log(`🚀 Server ready on port 3000`);
         });
     } catch (error) {
         console.error('❌ Failed to start server:', error.message);
@@ -407,12 +406,4 @@ const startServer = async () => {
     }
 };
 
-// Per Vercel (esportazione per serverless)
-if (process.env.VERCEL) {
-    // In ambiente Vercel, connetti al DB ma non avviare il server
-    connectToDatabase().catch(console.error);
-    module.exports = app;
-} else {
-    // In ambiente locale, avvia il server normalmente
-    startServer();
-}
+startServer();
