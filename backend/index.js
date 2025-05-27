@@ -6,7 +6,14 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
  
 const app = express();
-app.use(cors());
+
+const corsOptions = {
+    credentials: true,
+    origin: ['https://forked-front.vercel.app/', 'http://localhost:80'] // Whitelist the domains you want to allow
+};
+
+
+app.use(cors(corsOptions));
 app.use(express.json());
  
 const auth = require('./middlewares/auth');
