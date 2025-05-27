@@ -12,13 +12,11 @@ const corsOptions = {
     origin: '*'
 };
 
-
 app.use(cors(corsOptions));
 app.use(express.json());
  
 const auth = require('./middlewares/auth');
 const errorHandler = require('./middlewares/errorHandler');
- 
  
 app.use(errorHandler);
  
@@ -36,16 +34,25 @@ const connectToDatabase = async () => {
         await client.connect();
         db = client.db('Forked');
         console.log('✅ Connected to MongoDB');
+        return db;
     } catch (error) {
         console.error('❌ MongoDB connection error:', error.message);
-        process.exit(1);
+        throw error;
     }
+};
+
+// Middleware per verificare che il DB sia connesso
+const ensureDbConnection = (req, res, next) => {
+    if (!db) {
+        return res.status(503).json({ message: 'Database non disponibile' });
+    }
+    next();
 };
 
 app.get("/", (req, res) => res.send("Express on Vercel"));
  
 // Registrazione
-app.post('/forked/auth/register', async (req, res) => {
+app.post('/forked/auth/register', ensureDbConnection, async (req, res) => {
     try {
         const { email, password, name } = req.body;
  
@@ -79,9 +86,8 @@ app.post('/forked/auth/register', async (req, res) => {
     }
 });
  
- 
 // Login
-app.post('/forked/auth/login', async (req, res) => {
+app.post('/forked/auth/login', ensureDbConnection, async (req, res) => {
     try {
         const { email, password } = req.body;
  
@@ -114,7 +120,7 @@ app.post('/forked/auth/login', async (req, res) => {
 });
  
 // Visualizza ricette
-app.get('/forked/recipes', async (req, res) => {
+app.get('/forked/recipes', ensureDbConnection, async (req, res) => {
     try {
         const ricette = await db.collection('ricette').find().toArray();
         res.json(ricette);
@@ -125,7 +131,7 @@ app.get('/forked/recipes', async (req, res) => {
 });
  
 // Aggiungi ricetta
-app.post('/forked/recipies', auth, async (req, res) => {
+app.post('/forked/recipies', auth, ensureDbConnection, async (req, res) => {
     try {
         const { name, ingredients, instructions } = req.body;
  
@@ -153,7 +159,7 @@ app.post('/forked/recipies', auth, async (req, res) => {
 });
  
 // Generazione lista della spesa
-app.post('/forked/lista-spesa', async (req, res) => {
+app.post('/forked/lista-spesa', ensureDbConnection, async (req, res) => {
     try {
         const { ricette, persone } = req.body;
  
@@ -195,7 +201,7 @@ app.post('/forked/lista-spesa', async (req, res) => {
 });
  
 // GET - Visualizza lista della spesa (con query params)
-app.get('/forked/lista-spesa', async (req, res) => {
+app.get('/forked/lista-spesa', ensureDbConnection, async (req, res) => {
     try {
         const { ricette, persone } = req.query;
  
@@ -247,7 +253,7 @@ app.get('/forked/lista-spesa', async (req, res) => {
 });
  
 // GET - Dettaglio utente
-app.get('/forked/users/profile', auth, async (req, res) => {
+app.get('/forked/users/profile', auth, ensureDbConnection, async (req, res) => {
     try {
         // Escludi la password dalla risposta
         const user = await db.collection('users').findOne(
@@ -261,7 +267,7 @@ app.get('/forked/users/profile', auth, async (req, res) => {
 });
  
 // PUT - Aggiorna profilo (protetto)
-app.put('/forked/users/profile', auth, async (req, res) => {
+app.put('/forked/users/profile', auth, ensureDbConnection, async (req, res) => {
     try {
         const { name, email } = req.body;
         const updates = { updatedAt: new Date() };
@@ -279,7 +285,7 @@ app.put('/forked/users/profile', auth, async (req, res) => {
 });
  
 // Visualizza ricette dell'utente loggato
-app.get('/forked/myrecipes', auth, async (req, res) => {
+app.get('/forked/myrecipes', auth, ensureDbConnection, async (req, res) => {
     try {
         const ricette = await db.collection('ricette').find({
             userId: req.user._id
@@ -293,7 +299,7 @@ app.get('/forked/myrecipes', auth, async (req, res) => {
 });
  
 // POST - Aggiungi commento
-app.post('/forked/ricette/:nome/commenti', auth, async (req, res) => {
+app.post('/forked/ricette/:nome/commenti', auth, ensureDbConnection, async (req, res) => {
     try {
         const { testo } = req.body;
         const nomeRicetta = decodeURIComponent(req.params.nome); // Decodifica spazi/caratteri speciali
@@ -335,7 +341,7 @@ app.post('/forked/ricette/:nome/commenti', auth, async (req, res) => {
 });
  
 // GET - Ottieni commenti di una ricetta
-app.get('/forked/ricette/:nome/commenti', async (req, res) => {
+app.get('/forked/ricette/:nome/commenti', ensureDbConnection, async (req, res) => {
     try {
         const nomeRicetta = decodeURIComponent(req.params.nome);
  
@@ -360,7 +366,7 @@ app.get('/forked/ricette/:nome/commenti', async (req, res) => {
 });
  
 // DELETE - Elimina commento
-app.delete('/forked/ricette/:nome/commenti/:id', auth, async (req, res) => {
+app.delete('/forked/ricette/:nome/commenti/:id', auth, ensureDbConnection, async (req, res) => {
     try {
         const nomeRicetta = decodeURIComponent(req.params.nome);
         const commentId = req.params.id;
@@ -383,12 +389,30 @@ app.delete('/forked/ricette/:nome/commenti/:id', auth, async (req, res) => {
         res.status(500).json({ message: 'Errore nell\'eliminazione' });
     }
 });
- 
-// Connessione al database e avvio server
-connectToDatabase().then(() => {
-    app.listen(3000, () => {
-        console.log(`🚀 Server running on port 3000`);
-    });
-});
 
-module.exports = app;
+// Funzione principale per avviare il server
+const startServer = async () => {
+    try {
+        // Prima connettiti al database
+        await connectToDatabase();
+        
+        // Poi avvia il server
+        const PORT = process.env.PORT || 3000;
+        app.listen(PORT, () => {
+            console.log(`🚀 Server ready on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error('❌ Failed to start server:', error.message);
+        process.exit(1);
+    }
+};
+
+// Per Vercel (esportazione per serverless)
+if (process.env.VERCEL) {
+    // In ambiente Vercel, connetti al DB ma non avviare il server
+    connectToDatabase().catch(console.error);
+    module.exports = app;
+} else {
+    // In ambiente locale, avvia il server normalmente
+    startServer();
+}
